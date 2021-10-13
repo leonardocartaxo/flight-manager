@@ -1,45 +1,125 @@
-import { Model } from 'mongoose';
+import BaseRepository from './base.repository';
+import {
+  EntityManager,
+  QueryRunner,
+  RemoveOptions,
+  SaveOptions,
+  TransactionManager,
+} from 'typeorm';
+import { NotFoundException } from '@nestjs/common';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 export abstract class BaseService<Entity, Dto, CreateDto, UpdateDto> {
   protected constructor(
-    private model: Model<Entity>,
+    private readonly baseRepository: BaseRepository<Entity>,
     // eslint-disable-next-line @typescript-eslint/ban-types
-    private mapperEntityToDto: Function,
-    private relations: string[] = [],
+    private readonly funcEntityToDto: Function,
+    protected readonly populateRelations: string[] = [],
   ) {}
 
-  async create(createDto: CreateDto): Promise<Dto> {
-    const inserted = await this.model.insertMany(createDto);
-    const entity = await this.model.create(createDto);
-
-    return this.mapperEntityToDto(this.handleIfHasDoc(entity));
+  async getNewQueryRunner(): Promise<QueryRunner> {
+    return await this.baseRepository.getNewQueryRunner();
   }
 
-  async get(id: string): Promise<Dto> {
-    const entity = await this.model.findById(id).exec();
+  async create(
+    createDto: CreateDto,
+    options?: SaveOptions,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<Dto> {
+    const entity = await this.baseRepository.save(createDto, options, manager);
 
-    return this.mapperEntityToDto(this.handleIfHasDoc(entity));
+    return this.funcEntityToDto(entity);
   }
 
-  async getAll(): Promise<Dto[]> {
-    const list = await this.model.find().populate(this.relations).exec();
+  async getEntity(
+    id: string,
+    @TransactionManager() manager?: EntityManager,
+    populateRelations: string[] = this.populateRelations,
+  ): Promise<Entity> {
+    const entity = await this.baseRepository.getById(
+      id,
+      populateRelations,
+      manager,
+    );
+    if (!entity) throw new NotFoundException();
 
-    return list?.map((it) => this.mapperEntityToDto(this.handleIfHasDoc(it)));
+    return entity;
   }
 
-  async update(id: string, updateDto: UpdateDto): Promise<Dto> {
-    const entity = await this.model.findByIdAndUpdate(id, updateDto);
+  async get(
+    id: string,
+    @TransactionManager() manager?: EntityManager,
+    populateRelations: string[] = this.populateRelations,
+  ): Promise<Dto> {
+    const entity = await this.getEntity(id, manager, populateRelations);
+    if (!entity) throw new NotFoundException();
 
-    return this.mapperEntityToDto(this.handleIfHasDoc(entity));
+    return this.funcEntityToDto(entity);
   }
 
-  async delete(id: string): Promise<boolean> {
-    await this.model.findByIdAndDelete(id);
+  async getAll(
+    populateRelations: string[] = this.populateRelations,
+  ): Promise<Dto[]> {
+    const entities = await this.baseRepository.getAll(populateRelations);
 
-    return true;
+    if (!entities) {
+      throw new Error('Error on BaseService.getAll()');
+    }
+
+    return entities.map((it) => this.funcEntityToDto(it));
   }
 
-  handleIfHasDoc(obj: any): any {
-    return (obj as unknown as any)?._doc ?? obj;
+  async update(
+    id: string,
+    updateDto: UpdateDto,
+    options?: SaveOptions,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<Dto> {
+    await this.baseRepository.update(id, updateDto, manager);
+
+    return await this.get(id);
+  }
+
+  async updatePartial(
+    id: string,
+    updateDto: QueryDeepPartialEntity<Entity>,
+    options?: SaveOptions,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<Dto> {
+    await this.baseRepository.updatePartial(id, updateDto, manager);
+
+    return await this.get(id);
+  }
+
+  async softDelete(
+    id: string,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<boolean> {
+    const updateResult = await this.baseRepository.softDelete(id, manager);
+
+    return updateResult.affected > 0;
+  }
+
+  async delete(
+    id: string,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<boolean> {
+    const updateResult = await this.baseRepository.delete(id, manager);
+
+    return updateResult.affected > 0;
+  }
+
+  async remove(
+    entity: Entity,
+    options?: RemoveOptions,
+    @TransactionManager() manager?: EntityManager,
+  ): Promise<boolean> {
+    const entityRemoved = await this.baseRepository.removeEntity(
+      entity,
+      options,
+      manager,
+    );
+
+    return !!entityRemoved;
   }
 }
