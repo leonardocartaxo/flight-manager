@@ -20,6 +20,8 @@ Before creating/updating flights you have to create some entities
 - airports
 
 ## Run locally
+For running locally you have to provide a postgres uri connection in .env and crete a schema called 'flight-manager' 
+
 ``
 $ npm install
 ``
