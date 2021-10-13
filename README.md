@@ -27,3 +27,7 @@ $ npm install
 ``
 $ npm run start
 ``
+
+## DB diagram
+In the database customers and staffs have a FK for persons. I don't know why it not shows in this diagram. Maybe it's bug on the export image tool
+![](DB-diagram.png "DB-diagram")
