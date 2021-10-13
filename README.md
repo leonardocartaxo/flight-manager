@@ -21,7 +21,7 @@ Before creating/updating flights you have to create some entities
 
 ## Run locally
 ``
-$ npm instal
+$ npm install
 ``
 
 ``
